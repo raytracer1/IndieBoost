@@ -37,7 +37,7 @@ export default function CampaignForm() {
       }
 
       const campaign = await res.json();
-      router.push(`/campaign/${campaign.id}`);
+      router.push(`/campaign/${campaign.id}/select`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {

@@ -4,8 +4,10 @@ import { campaigns } from './routes/campaigns';
 import { results } from './routes/results';
 import { track } from './routes/track';
 import { executions } from './routes/executions';
+import { executors } from './routes/executors';
 import { auth } from './routes/auth';
-import { requireAuth } from './middleware/auth';
+import { requireAuth, optionalAuth } from './middleware/auth';
+import { initApp } from './init';
 
 type Bindings = {
   DB: D1Database;
@@ -14,9 +16,16 @@ type Bindings = {
   GOOGLE_CLIENT_SECRET: string;
   GOOGLE_REDIRECT_URI: string;
   RESEND_API_KEY: string;
+  ADMIN_EMAIL: string;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
+
+// Initialize admin user + executor linking on first request
+app.use('*', async (c, next) => {
+  await initApp(c.env.DB, c.env.ADMIN_EMAIL);
+  await next();
+});
 
 app.use('*', cors({
   origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
@@ -44,5 +53,8 @@ app.get('/api/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISO
 app.use('/api/campaigns/*', requireAuth);
 app.route('/api/campaigns', campaigns);
 app.route('/api/campaigns', results);
+// Executors: optional auth (public endpoint open, management checks auth internally)
+app.use('/api/executors/*', optionalAuth);
+app.route('/api/executors', executors);
 
 export default app;

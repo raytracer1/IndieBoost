@@ -38,7 +38,6 @@ export default function CampaignDashboard({
   const { id } = use(params);
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
 
   async function fetchCampaign() {
@@ -69,23 +68,6 @@ export default function CampaignDashboard({
       return () => clearInterval(interval);
     }
   }, [campaign?.status]);
-
-  async function handleStart() {
-    setStarting(true);
-    const token = localStorage.getItem("indieboost_token");
-    try {
-      const res = await fetch(`${API_BASE}/api/campaigns/${id}/start`, {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (!res.ok) throw new Error("Failed to start");
-      await fetchCampaign();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to start");
-    } finally {
-      setStarting(false);
-    }
-  }
 
   if (loading) {
     return (
@@ -155,13 +137,12 @@ export default function CampaignDashboard({
         </div>
 
         {campaign.status === "draft" && (
-          <button
-            onClick={handleStart}
-            disabled={starting}
-            className="bg-indigo-600 text-white font-semibold px-6 py-2.5 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition"
+          <Link
+            href={`/campaign/${id}/select`}
+            className="bg-indigo-600 text-white font-semibold px-6 py-2.5 rounded-lg hover:bg-indigo-700 transition inline-block"
           >
-            {starting ? "Starting..." : "Start Campaign"}
-          </button>
+            Select Agents &amp; Launch
+          </Link>
         )}
       </div>
 

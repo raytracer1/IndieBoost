@@ -27,7 +27,9 @@ app.get('/pending', async (c) => {
       JOIN executors e ON ae.executor_id = e.id
       JOIN campaigns c ON ae.campaign_id = c.id
       JOIN products p ON c.product_id = p.id
-      WHERE ae.status = 'pending' AND e.type = 'ai'
+      WHERE ae.status = 'pending'
+        AND e.type = 'ai'
+        AND e.webhook_url IS NULL
       ORDER BY ae.id
       LIMIT 10
     `)

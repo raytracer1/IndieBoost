@@ -141,44 +141,112 @@ app.post('/:id/start', async (c) => {
     .bind(id)
     .run();
 
-  // Select active AI executors (2-4 based on budget)
-  const activeExecutors = await db
-    .prepare("SELECT * FROM executors WHERE type = 'ai' AND is_active = 1")
-    .all<{ id: number; name: string; category: string }>();
+  // User must provide executor_ids — manual selection only
+  const { executor_ids } = await c.req.json().catch(() => ({}));
 
-  const executorCount = campaign.budget < 20 ? 2 : campaign.budget < 50 ? 3 : 4;
-  const selected = activeExecutors.results.slice(0, executorCount);
+  if (!executor_ids || !Array.isArray(executor_ids) || executor_ids.length === 0) {
+    return c.json({ error: 'executor_ids is required (array of executor IDs to use)' }, 400);
+  }
+
+  // Fetch selected executors — any active executor visible to this user
+  const placeholders = executor_ids.map(() => '?').join(',');
+  const selected = await db
+    .prepare(`
+      SELECT * FROM executors
+      WHERE id IN (${placeholders})
+        AND type = 'ai'
+        AND is_active = 1
+        AND (user_id IS NULL OR user_id = ? OR is_public = 1)
+    `)
+    .bind(...executor_ids, user.id)
+    .all<{ id: number; name: string; category: string; webhook_url: string | null }>();
+
+  if (selected.results.length === 0) {
+    return c.json({ error: 'No valid executors selected. Check IDs.' }, 400);
+  }
 
   // Split budget equally among selected executors
-  const budgetPerExecutor = campaign.budget / selected.length;
+  const budgetPerExecutor = campaign.budget / selected.results.length;
 
   // Create agent_execution rows
   const stmt = db.prepare(
     'INSERT INTO agent_executions (campaign_id, executor_id, status, cost) VALUES (?, ?, ?, ?)'
   );
 
-  const batch = selected.map((executor) =>
+  const batch = selected.results.map((executor) =>
     stmt.bind(id, executor.id, 'pending', budgetPerExecutor)
   );
 
   await db.batch(batch);
 
-  // Return created executions
+  // Fetch product info for webhook dispatch
+  const product = await db
+    .prepare('SELECT url, name FROM products WHERE id = (SELECT product_id FROM campaigns WHERE id = ?)')
+    .bind(id)
+    .first<{ url: string; name: string }>();
+
+  // Fetch created executions
   const executions = await db
     .prepare(`
-      SELECT ae.*, e.name as executor_name, e.category as executor_category
+      SELECT ae.*, e.name as executor_name, e.category as executor_category, e.webhook_url
       FROM agent_executions ae
       JOIN executors e ON ae.executor_id = e.id
       WHERE ae.campaign_id = ? AND ae.status = 'pending'
       ORDER BY ae.id
     `)
     .bind(id)
-    .all();
+    .all<{
+      id: number; executor_id: number; executor_name: string;
+      executor_category: string; webhook_url: string | null; cost: number;
+    }>();
+
+  // Dispatch webhook calls for custom executors (fire-and-forget)
+  for (const exec of executions.results) {
+    if (exec.webhook_url) {
+      const payload = {
+        executionId: exec.id,
+        campaignId: campaign.id,
+        productUrl: product?.url || '',
+        productName: product?.name || '',
+        budget: exec.cost,
+        goal: campaign.goal,
+      };
+
+      // Fire and forget — don't block the response
+      c.executionCtx.waitUntil(
+        fetch(exec.webhook_url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }).then(async (res) => {
+          if (res.ok) {
+            await db
+              .prepare("UPDATE agent_executions SET status = 'running', started_at = datetime('now') WHERE id = ?")
+              .bind(exec.id)
+              .run();
+            console.log(`Webhook dispatched: ${exec.webhook_url} (execution #${exec.id})`);
+          } else {
+            console.error(`Webhook failed: ${exec.webhook_url} status=${res.status}`);
+          }
+        }).catch((err) => {
+          console.error(`Webhook error: ${exec.webhook_url}`, err.message);
+        })
+      );
+    }
+  }
 
   return c.json({
     id: campaign.id,
     status: 'running',
-    agents: executions.results,
+    agents: executions.results.map((e) => ({
+      id: e.id,
+      executor_id: e.executor_id,
+      executor_name: e.executor_name,
+      category: e.executor_category,
+      status: 'pending',
+      cost: e.cost,
+      webhook_url: e.webhook_url,
+    })),
   });
 });
 
