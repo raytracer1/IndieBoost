@@ -1,0 +1,20 @@
+{
+  "name": "indieboost-backend",
+  "version": "1.0.0",
+  "description": "IndieBoost backend API on Cloudflare Workers",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --persist-to=./.wrangler/state",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply indieboost-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply indieboost-db --remote",
+    "db:seed:local": "wrangler d1 execute indieboost-db --local --file=./migrations/0002_seed.sql"
+  },
+  "dependencies": {
+    "hono": "^4.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250303.0",
+    "wrangler": "^4.0.0"
+  }
+}

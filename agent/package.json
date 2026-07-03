@@ -1,0 +1,10 @@
+{
+  "name": "indieboost-agent",
+  "version": "1.0.0",
+  "description": "IndieBoost AI Agent Daemon - polls backend for pending executions and runs simulations",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  }
+}
