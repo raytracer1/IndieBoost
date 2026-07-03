@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
-import { createJWT } from '../middleware/auth';
+import { createJWT, verifyJWT } from '../middleware/auth';
+import { hashPassword, verifyPassword } from '../utils/password';
 
 type Bindings = {
   DB: D1Database;
@@ -10,6 +11,85 @@ type Bindings = {
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
+
+// POST /api/auth/register — Email + password registration
+app.post('/register', async (c) => {
+  const db = c.env.DB;
+  const { email, password, name } = await c.req.json();
+
+  if (!email || !password) {
+    return c.json({ error: 'Email and password are required' }, 400);
+  }
+  if (password.length < 6) {
+    return c.json({ error: 'Password must be at least 6 characters' }, 400);
+  }
+
+  // Check if email already exists
+  const existing = await db
+    .prepare('SELECT id FROM users WHERE email = ?')
+    .bind(email.toLowerCase().trim())
+    .first();
+
+  if (existing) {
+    return c.json({ error: 'An account with this email already exists' }, 409);
+  }
+
+  // Hash password
+  const passwordHash = await hashPassword(password);
+
+  // Create user
+  const result = await db
+    .prepare("INSERT INTO users (email, password_hash, name, type) VALUES (?, ?, ?, 'email')")
+    .bind(email.toLowerCase().trim(), passwordHash, name || email.split('@')[0])
+    .run();
+
+  const user = {
+    id: result.meta.last_row_id as number,
+    email: email.toLowerCase().trim(),
+    name: name || email.split('@')[0],
+    avatar_url: null,
+  };
+
+  const token = await createJWT(user, c.env.JWT_SECRET);
+
+  return c.json({ user, token }, 201);
+});
+
+// POST /api/auth/login — Email + password login
+app.post('/login', async (c) => {
+  const db = c.env.DB;
+  const { email, password } = await c.req.json();
+
+  if (!email || !password) {
+    return c.json({ error: 'Email and password are required' }, 400);
+  }
+
+  // Find user
+  const user = await db
+    .prepare('SELECT * FROM users WHERE email = ?')
+    .bind(email.toLowerCase().trim())
+    .first<{ id: number; email: string; password_hash: string | null; name: string | null; avatar_url: string | null }>();
+
+  if (!user || !user.password_hash) {
+    return c.json({ error: 'Invalid email or password. If you signed up with Google, please use Google Sign-In.' }, 401);
+  }
+
+  // Verify password
+  const valid = await verifyPassword(password, user.password_hash);
+  if (!valid) {
+    return c.json({ error: 'Invalid email or password' }, 401);
+  }
+
+  const token = await createJWT(
+    { id: user.id, email: user.email, name: user.name, avatar_url: user.avatar_url },
+    c.env.JWT_SECRET
+  );
+
+  return c.json({
+    user: { id: user.id, email: user.email, name: user.name, avatar_url: user.avatar_url },
+    token,
+  });
+});
 
 // GET /api/auth/google — Redirect to Google OAuth
 app.get('/google', (c) => {
@@ -108,7 +188,7 @@ app.get('/google/callback', async (c) => {
         // Create new user
         const result = await db
           .prepare(
-            'INSERT INTO users (email, google_id, name, avatar_url) VALUES (?, ?, ?, ?)'
+            "INSERT INTO users (email, google_id, name, avatar_url, type) VALUES (?, ?, ?, ?, 'google')"
           )
           .bind(googleUser.email, googleUser.id, googleUser.name, googleUser.picture)
           .run();

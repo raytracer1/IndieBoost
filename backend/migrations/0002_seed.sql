@@ -7,4 +7,4 @@ INSERT OR IGNORE INTO executors (name, type, category) VALUES
   ('Twitter Agent',  'ai', 'twitter'),
   ('Newsletter Agent','ai', 'newsletter');
 
-INSERT OR IGNORE INTO users (email) VALUES ('demo@indieboost.io');
+INSERT OR IGNORE INTO users (email, type, name) VALUES ('demo@indieboost.io', 'email', 'Demo User');

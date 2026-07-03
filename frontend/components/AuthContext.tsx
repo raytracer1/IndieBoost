@@ -15,7 +15,9 @@ interface AuthState {
   user: User | null;
   token: string | null;
   loading: boolean;
-  login: () => void;
+  loginWithGoogle: () => void;
+  loginWithEmail: (email: string, password: string) => Promise<string | null>;
+  registerWithEmail: (email: string, password: string, name?: string) => Promise<string | null>;
   logout: () => void;
 }
 
@@ -23,7 +25,9 @@ const AuthContext = createContext<AuthState>({
   user: null,
   token: null,
   loading: true,
-  login: () => {},
+  loginWithGoogle: () => {},
+  loginWithEmail: async () => null,
+  registerWithEmail: async () => null,
   logout: () => {},
 });
 
@@ -67,8 +71,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
   }, [token]);
 
-  const login = useCallback(() => {
+  const loginWithGoogle = useCallback(() => {
     window.location.href = `${API_BASE}/api/auth/google`;
+  }, []);
+
+  const loginWithEmail = useCallback(async (email: string, password: string): Promise<string | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (res.ok && data.token) {
+        setToken(data.token);
+        return null; // success
+      }
+      return data.error || "Login failed";
+    } catch {
+      return "Network error. Please try again.";
+    }
+  }, []);
+
+  const registerWithEmail = useCallback(async (email: string, password: string, name?: string): Promise<string | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, name }),
+      });
+      const data = await res.json();
+      if (res.ok && data.token) {
+        setToken(data.token);
+        return null; // success
+      }
+      return data.error || "Registration failed";
+    } catch {
+      return "Network error. Please try again.";
+    }
   }, []);
 
   const logout = useCallback(() => {
@@ -77,13 +117,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("indieboost_token");
   }, []);
 
-  // Expose setToken for the callback page
-  if (typeof window !== "undefined") {
-    (window as unknown as Record<string, unknown>).__indieboost_setToken = setToken;
-  }
-
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, loginWithGoogle, loginWithEmail, registerWithEmail, logout }}>
       {children}
     </AuthContext.Provider>
   );

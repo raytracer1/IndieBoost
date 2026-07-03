@@ -13,6 +13,11 @@ CREATE TABLE IF NOT EXISTS executors (
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   email TEXT UNIQUE NOT NULL DEFAULT 'demo@indieboost.io',
+  type TEXT NOT NULL DEFAULT 'email' CHECK(type IN ('email', 'google')),
+  google_id TEXT UNIQUE,
+  name TEXT,
+  avatar_url TEXT,
+  password_hash TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
 
