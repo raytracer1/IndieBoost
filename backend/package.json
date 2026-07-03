@@ -11,7 +11,8 @@
     "db:seed:local": "wrangler d1 execute indieboost-db --local --file=./migrations/0002_seed.sql"
   },
   "dependencies": {
-    "hono": "^4.0.0"
+    "hono": "^4.0.0",
+    "jose": "^6.2.3"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250303.0",

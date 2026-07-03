@@ -54,7 +54,11 @@ export default function ResultsPage({
   useEffect(() => {
     async function fetchResults() {
       try {
-        const res = await fetch(`${API_BASE}/api/campaigns/${id}/results`);
+        const token = localStorage.getItem("indieboost_token");
+        const res = await fetch(`${API_BASE}/api/campaigns/${id}/results`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (res.status === 401) { setError("Please log in"); setLoading(false); return; }
         if (!res.ok) throw new Error("Failed to load results");
         const data = await res.json();
         setResults(data);

@@ -42,8 +42,12 @@ export default function CampaignDashboard({
   const [error, setError] = useState("");
 
   async function fetchCampaign() {
+    const token = localStorage.getItem("indieboost_token");
     try {
-      const res = await fetch(`${API_BASE}/api/campaigns/${id}`);
+      const res = await fetch(`${API_BASE}/api/campaigns/${id}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.status === 401) { router.push("/"); return; }
       if (!res.ok) throw new Error("Campaign not found");
       const data = await res.json();
       setCampaign(data);
@@ -68,9 +72,11 @@ export default function CampaignDashboard({
 
   async function handleStart() {
     setStarting(true);
+    const token = localStorage.getItem("indieboost_token");
     try {
       const res = await fetch(`${API_BASE}/api/campaigns/${id}/start`, {
         method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) throw new Error("Failed to start");
       await fetchCampaign();

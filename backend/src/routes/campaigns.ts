@@ -4,11 +4,19 @@ type Bindings = {
   DB: D1Database;
 };
 
-const app = new Hono<{ Bindings: Bindings }>();
+type AuthUser = {
+  id: number;
+  email: string;
+  name: string | null;
+  avatar_url: string | null;
+};
+
+const app = new Hono<{ Bindings: Bindings; Variables: { user: AuthUser | null } }>();
 
 // POST /api/campaigns — Create a campaign
 app.post('/', async (c) => {
   const db = c.env.DB;
+  const user = c.get('user');
   const { url, name, goal, budget } = await c.req.json();
 
   // Validate
@@ -19,13 +27,7 @@ app.post('/', async (c) => {
   if (!budget || budget < 5 || budget > 100) {
     return c.json({ error: 'Budget must be between $5 and $100' }, 400);
   }
-
-  // Ensure demo user exists
-  let user = await db.prepare('SELECT id FROM users LIMIT 1').first<{ id: number }>();
-  if (!user) {
-    const userResult = await db.prepare("INSERT INTO users (email) VALUES ('demo@indieboost.io')").run();
-    user = { id: userResult.meta.last_row_id as number };
-  }
+  if (!user) return c.json({ error: 'Authentication required' }, 401);
 
   // Extract product name from URL if not provided
   const productName = name || extractDomain(url);
@@ -55,36 +57,45 @@ app.post('/', async (c) => {
   return c.json(campaign, 201);
 });
 
-// GET /api/campaigns — List all campaigns
+// GET /api/campaigns — List current user's campaigns
 app.get('/', async (c) => {
   const db = c.env.DB;
+  const user = c.get('user');
+  if (!user) return c.json({ error: 'Authentication required' }, 401);
+
   const campaigns = await db
     .prepare(`
       SELECT c.*, p.url as product_url, p.name as product_name
       FROM campaigns c
       JOIN products p ON c.product_id = p.id
+      WHERE p.user_id = ?
       ORDER BY c.created_at DESC
     `)
+    .bind(user.id)
     .all();
+
   return c.json(campaigns.results);
 });
 
-// GET /api/campaigns/:id — Get single campaign with executions
+// GET /api/campaigns/:id — Get single campaign with executions (ownership checked)
 app.get('/:id', async (c) => {
   const db = c.env.DB;
+  const user = c.get('user');
   const id = c.req.param('id');
+  if (!user) return c.json({ error: 'Authentication required' }, 401);
 
   const campaign = await db
     .prepare(`
-      SELECT c.*, p.url as product_url, p.name as product_name
+      SELECT c.*, p.url as product_url, p.name as product_name, p.user_id
       FROM campaigns c
       JOIN products p ON c.product_id = p.id
       WHERE c.id = ?
     `)
     .bind(id)
-    .first();
+    .first<{ id: number; user_id: number; [key: string]: unknown }>();
 
   if (!campaign) return c.json({ error: 'Campaign not found' }, 404);
+  if (campaign.user_id !== user.id) return c.json({ error: 'Not authorized' }, 403);
 
   const executions = await db
     .prepare(`
@@ -97,20 +108,29 @@ app.get('/:id', async (c) => {
     .bind(id)
     .all();
 
-  return c.json({ ...campaign, executions: executions.results });
+  const { user_id, ...campaignData } = campaign;
+  return c.json({ ...campaignData, executions: executions.results });
 });
 
-// POST /api/campaigns/:id/start — Launch campaign
+// POST /api/campaigns/:id/start — Launch campaign (ownership checked)
 app.post('/:id/start', async (c) => {
   const db = c.env.DB;
+  const user = c.get('user');
   const id = c.req.param('id');
+  if (!user) return c.json({ error: 'Authentication required' }, 401);
 
   const campaign = await db
-    .prepare('SELECT * FROM campaigns WHERE id = ?')
+    .prepare(`
+      SELECT c.*, p.user_id
+      FROM campaigns c
+      JOIN products p ON c.product_id = p.id
+      WHERE c.id = ?
+    `)
     .bind(id)
-    .first<{ id: number; status: string; budget: number }>();
+    .first<{ id: number; status: string; budget: number; user_id: number }>();
 
   if (!campaign) return c.json({ error: 'Campaign not found' }, 404);
+  if (campaign.user_id !== user.id) return c.json({ error: 'Not authorized' }, 403);
   if (campaign.status !== 'draft') {
     return c.json({ error: 'Campaign can only be started from draft status' }, 400);
   }

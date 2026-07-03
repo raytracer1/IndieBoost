@@ -1,19 +1,28 @@
 import { Hono } from 'hono';
 
+type AuthUser = {
+  id: number;
+  email: string;
+  name: string | null;
+  avatar_url: string | null;
+};
+
 type Bindings = {
   DB: D1Database;
 };
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<{ Bindings: Bindings; Variables: { user: AuthUser | null } }>();
 
 // GET /api/campaigns/:id/results — Aggregated campaign results + ROI
 app.get('/:id/results', async (c) => {
   const db = c.env.DB;
+  const user = c.get('user');
   const id = c.req.param('id');
+  if (!user) return c.json({ error: 'Authentication required' }, 401);
 
   const campaign = await db
     .prepare(`
-      SELECT c.*, p.url as product_url, p.name as product_name
+      SELECT c.*, p.url as product_url, p.name as product_name, p.user_id
       FROM campaigns c
       JOIN products p ON c.product_id = p.id
       WHERE c.id = ?
@@ -22,9 +31,11 @@ app.get('/:id/results', async (c) => {
     .first<{
       id: number; budget: number; goal: string; status: string;
       product_url: string; product_name: string; created_at: string;
+      user_id: number;
     }>();
 
   if (!campaign) return c.json({ error: 'Campaign not found' }, 404);
+  if (campaign.user_id !== user.id) return c.json({ error: 'Not authorized' }, 403);
 
   // Get all executions with executor info
   const executions = await db
