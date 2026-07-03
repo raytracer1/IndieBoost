@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { createJWT, verifyJWT } from '../middleware/auth';
 import { hashPassword, verifyPassword } from '../utils/password';
+import { sendEmail, generateOTP, otpEmailHTML } from '../utils/email';
 
 type Bindings = {
   DB: D1Database;
@@ -8,6 +9,7 @@ type Bindings = {
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   GOOGLE_REDIRECT_URI: string;
+  RESEND_API_KEY: string;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -37,22 +39,81 @@ app.post('/register', async (c) => {
   // Hash password
   const passwordHash = await hashPassword(password);
 
-  // Create user
+  // Generate OTP
+  const otp = generateOTP();
+  const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 min
+
+  // Create user (unverified)
   const result = await db
-    .prepare("INSERT INTO users (email, password_hash, name, type) VALUES (?, ?, ?, 'email')")
-    .bind(email.toLowerCase().trim(), passwordHash, name || email.split('@')[0])
+    .prepare("INSERT INTO users (email, password_hash, name, type, email_verified, otp_code, otp_expires_at) VALUES (?, ?, ?, 'email', 0, ?, ?)")
+    .bind(email.toLowerCase().trim(), passwordHash, name || email.split('@')[0], otp, otpExpiresAt)
     .run();
 
-  const user = {
-    id: result.meta.last_row_id as number,
+  // Send OTP via Resend
+  const sent = await sendEmail(c.env.RESEND_API_KEY, {
+    to: email.toLowerCase().trim(),
+    subject: 'Verify your email — IndieBoost',
+    html: otpEmailHTML(otp),
+  });
+
+  if (!sent) {
+    console.log(`[DEV] OTP for ${email}: ${otp}`);
+  }
+
+  return c.json({
+    message: 'Account created. Please check your email for a verification code.',
     email: email.toLowerCase().trim(),
-    name: name || email.split('@')[0],
-    avatar_url: null,
-  };
+    // Include OTP in dev mode or when Resend fails
+    ...(c.env.RESEND_API_KEY === 'dev' || !sent ? { otp } : {}),
+  }, 201);
+});
 
-  const token = await createJWT(user, c.env.JWT_SECRET);
+// POST /api/auth/verify-email — Verify email with OTP
+app.post('/verify-email', async (c) => {
+  const db = c.env.DB;
+  const { email, otp } = await c.req.json();
 
-  return c.json({ user, token }, 201);
+  if (!email || !otp) {
+    return c.json({ error: 'Email and OTP are required' }, 400);
+  }
+
+  const user = await db
+    .prepare('SELECT id, email, name, avatar_url, otp_code, otp_expires_at, email_verified FROM users WHERE email = ?')
+    .bind(email.toLowerCase().trim())
+    .first<{
+      id: number; email: string; name: string | null; avatar_url: string | null;
+      otp_code: string | null; otp_expires_at: string | null; email_verified: number;
+    }>();
+
+  if (!user) return c.json({ error: 'User not found' }, 404);
+  if (user.email_verified) return c.json({ error: 'Email already verified. Please sign in.' }, 400);
+  if (!user.otp_code || !user.otp_expires_at) {
+    return c.json({ error: 'No verification code found. Please register again.' }, 400);
+  }
+
+  if (new Date(user.otp_expires_at) < new Date()) {
+    return c.json({ error: 'Verification code has expired. Please register again.' }, 400);
+  }
+
+  if (user.otp_code !== otp) {
+    return c.json({ error: 'Invalid verification code' }, 400);
+  }
+
+  // Mark verified and clear OTP
+  await db
+    .prepare('UPDATE users SET email_verified = 1, otp_code = NULL, otp_expires_at = NULL WHERE id = ?')
+    .bind(user.id)
+    .run();
+
+  const token = await createJWT(
+    { id: user.id, email: user.email, name: user.name, avatar_url: user.avatar_url },
+    c.env.JWT_SECRET
+  );
+
+  return c.json({
+    user: { id: user.id, email: user.email, name: user.name, avatar_url: user.avatar_url },
+    token,
+  });
 });
 
 // POST /api/auth/login — Email + password login
@@ -68,10 +129,15 @@ app.post('/login', async (c) => {
   const user = await db
     .prepare('SELECT * FROM users WHERE email = ?')
     .bind(email.toLowerCase().trim())
-    .first<{ id: number; email: string; password_hash: string | null; name: string | null; avatar_url: string | null }>();
+    .first<{ id: number; email: string; password_hash: string | null; name: string | null; avatar_url: string | null; email_verified: number }>();
 
   if (!user || !user.password_hash) {
     return c.json({ error: 'Invalid email or password. If you signed up with Google, please use Google Sign-In.' }, 401);
+  }
+
+  // Check email verified
+  if (!user.email_verified) {
+    return c.json({ error: 'Please verify your email before signing in. Check your inbox for a verification code.' }, 403);
   }
 
   // Verify password

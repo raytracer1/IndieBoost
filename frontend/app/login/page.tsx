@@ -6,15 +6,21 @@ import { useAuth } from "@/components/AuthContext";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { user, loginWithGoogle, loginWithEmail, registerWithEmail } = useAuth();
+  const { user, loginWithGoogle, loginWithEmail, registerWithEmail, verifyEmail } = useAuth();
   const [mode, setMode] = useState<"login" | "register">("login");
+
+  // Form fields
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Already logged in
+  // OTP state
+  const [showOTP, setShowOTP] = useState(false);
+  const [otpEmail, setOtpEmail] = useState("");
+  const [otp, setOtp] = useState("");
+
   if (user) {
     router.push("/create");
     return null;
@@ -25,25 +31,93 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    let err: string | null;
-    if (mode === "login") {
-      err = await loginWithEmail(email, password);
+    if (mode === "register") {
+      const result = await registerWithEmail(email, password, name || undefined);
+      if (result.needsVerification && result.email) {
+        setOtpEmail(result.email);
+        setShowOTP(true);
+      } else if (result.error) {
+        setError(result.error);
+      }
     } else {
-      err = await registerWithEmail(email, password, name || undefined);
-      if (!err) {
+      const err = await loginWithEmail(email, password);
+      if (err) {
+        // If unverified, offer to enter OTP
+        if (err.includes("verify your email")) {
+          setOtpEmail(email);
+          setShowOTP(true);
+          setError(err);
+        } else {
+          setError(err);
+        }
+      } else {
         router.push("/create");
-        return;
       }
     }
 
     setLoading(false);
-    if (err) {
-      setError(err);
-    } else if (mode === "login") {
-      router.push("/create");
-    }
   }
 
+  async function handleVerifyOTP() {
+    setError("");
+    setLoading(true);
+    const err = await verifyEmail(otpEmail, otp);
+    if (err) {
+      setError(err);
+    } else {
+      router.push("/create");
+    }
+    setLoading(false);
+  }
+
+  // OTP input screen
+  if (showOTP) {
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center px-4">
+        <div className="w-full max-w-sm text-center">
+          <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-lg font-bold mx-auto mb-4">
+            ✉
+          </div>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">Check Your Email</h1>
+          <p className="text-sm text-gray-500 mb-6">
+            We sent a 6-digit code to <strong>{otpEmail}</strong>. Enter it below to verify your account.
+          </p>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 mb-4">
+              {error}
+            </div>
+          )}
+
+          <input
+            type="text"
+            maxLength={6}
+            value={otp}
+            onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+            placeholder="000000"
+            className="w-full text-center text-3xl font-bold tracking-[0.5em] border border-gray-300 rounded-xl px-4 py-3 mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+
+          <button
+            onClick={handleVerifyOTP}
+            disabled={loading || otp.length !== 6}
+            className="w-full bg-indigo-600 text-white font-semibold py-3 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition mb-3"
+          >
+            {loading ? "Verifying..." : "Verify Email"}
+          </button>
+
+          <button
+            onClick={() => { setShowOTP(false); setError(""); }}
+            className="text-sm text-indigo-600 hover:underline"
+          >
+            ← Back to sign in
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Login / Register form
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
@@ -51,7 +125,6 @@ export default function LoginPage() {
           {mode === "login" ? "Sign In" : "Create Account"}
         </h1>
 
-        {/* Google OAuth */}
         <button
           onClick={loginWithGoogle}
           className="w-full flex items-center justify-center gap-3 bg-white border border-gray-300 text-gray-700 font-medium px-4 py-3 rounded-xl hover:bg-gray-50 transition mb-4"
@@ -71,7 +144,6 @@ export default function LoginPage() {
           <hr className="flex-1 border-gray-200" />
         </div>
 
-        {/* Email form */}
         <form onSubmit={handleSubmit} className="space-y-3">
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
@@ -135,7 +207,7 @@ export default function LoginPage() {
             <>
               Don&apos;t have an account?{" "}
               <button
-                onClick={() => setMode("register")}
+                onClick={() => { setMode("register"); setError(""); }}
                 className="text-indigo-600 hover:underline font-medium"
               >
                 Sign up
@@ -145,7 +217,7 @@ export default function LoginPage() {
             <>
               Already have an account?{" "}
               <button
-                onClick={() => setMode("login")}
+                onClick={() => { setMode("login"); setError(""); }}
                 className="text-indigo-600 hover:underline font-medium"
               >
                 Sign in

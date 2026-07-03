@@ -11,13 +11,20 @@ interface User {
   avatar_url: string | null;
 }
 
+interface RegisterResult {
+  needsVerification?: boolean;
+  email?: string;
+  error?: string;
+}
+
 interface AuthState {
   user: User | null;
   token: string | null;
   loading: boolean;
   loginWithGoogle: () => void;
   loginWithEmail: (email: string, password: string) => Promise<string | null>;
-  registerWithEmail: (email: string, password: string, name?: string) => Promise<string | null>;
+  registerWithEmail: (email: string, password: string, name?: string) => Promise<RegisterResult>;
+  verifyEmail: (email: string, otp: string) => Promise<string | null>;
   logout: () => void;
 }
 
@@ -26,6 +33,9 @@ const AuthContext = createContext<AuthState>({
   token: null,
   loading: true,
   loginWithGoogle: () => {},
+  loginWithEmail: async () => null,
+  registerWithEmail: async () => ({}),
+  verifyEmail: async () => null,
   loginWithEmail: async () => null,
   registerWithEmail: async () => null,
   logout: () => {},
@@ -93,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const registerWithEmail = useCallback(async (email: string, password: string, name?: string): Promise<string | null> => {
+  const registerWithEmail = useCallback(async (email: string, password: string, name?: string): Promise<RegisterResult> => {
     try {
       const res = await fetch(`${API_BASE}/api/auth/register`, {
         method: "POST",
@@ -101,11 +111,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ email, password, name }),
       });
       const data = await res.json();
+      if (res.ok) {
+        // If OTP/verification is needed
+        if (data.message && data.email) {
+          return { needsVerification: true, email: data.email };
+        }
+        // Direct login (shouldn't happen with OTP, but handle gracefully)
+        if (data.token) {
+          setToken(data.token);
+          return {};
+        }
+        return { error: "Unexpected response" };
+      }
+      return { error: data.error || "Registration failed" };
+    } catch {
+      return { error: "Network error. Please try again." };
+    }
+  }, []);
+
+  const verifyEmail = useCallback(async (email: string, otp: string): Promise<string | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/verify-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, otp }),
+      });
+      const data = await res.json();
       if (res.ok && data.token) {
         setToken(data.token);
         return null; // success
       }
-      return data.error || "Registration failed";
+      return data.error || "Verification failed";
     } catch {
       return "Network error. Please try again.";
     }
@@ -118,7 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, loginWithGoogle, loginWithEmail, registerWithEmail, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, loginWithGoogle, loginWithEmail, registerWithEmail, verifyEmail, logout }}>
       {children}
     </AuthContext.Provider>
   );
