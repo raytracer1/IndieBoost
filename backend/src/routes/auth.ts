@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { createJWT, verifyJWT } from '../middleware/auth';
+import { createJWT, verifyJWT, setAuthCookie } from '../middleware/auth';
 import { hashPassword, verifyPassword } from '../utils/password';
 import { sendEmail, generateOTP, otpEmailHTML } from '../utils/email';
 
@@ -109,11 +109,9 @@ app.post('/verify-email', async (c) => {
     { id: user.id, email: user.email, name: user.name, avatar_url: user.avatar_url },
     c.env.JWT_SECRET
   );
+  setAuthCookie(c, token);
 
-  return c.json({
-    user: { id: user.id, email: user.email, name: user.name, avatar_url: user.avatar_url },
-    token,
-  });
+  return c.json({ user: { id: user.id, email: user.email, name: user.name, avatar_url: user.avatar_url } });
 });
 
 // POST /api/auth/login — Email + password login
@@ -150,11 +148,9 @@ app.post('/login', async (c) => {
     { id: user.id, email: user.email, name: user.name, avatar_url: user.avatar_url },
     c.env.JWT_SECRET
   );
+  setAuthCookie(c, token);
 
-  return c.json({
-    user: { id: user.id, email: user.email, name: user.name, avatar_url: user.avatar_url },
-    token,
-  });
+  return c.json({ user: { id: user.id, email: user.email, name: user.name, avatar_url: user.avatar_url } });
 });
 
 // GET /api/auth/google — Redirect to Google OAuth
@@ -268,34 +264,32 @@ app.get('/google/callback', async (c) => {
       }
     }
 
-    // Create JWT and redirect to frontend
+    // Create JWT, set cookie, redirect to frontend
     const token = await createJWT(user, c.env.JWT_SECRET);
+    setAuthCookie(c, token);
 
-    // Build frontend URL from redirect URI (strip /api/auth/google/callback)
     const frontendBase = c.env.GOOGLE_REDIRECT_URI?.replace('/api/auth/google/callback', '') || 'http://localhost:3000';
-    return c.redirect(`${frontendBase}/auth/callback?token=${token}`);
+    return c.redirect(`${frontendBase}/create`);
   } catch (err) {
     console.error('OAuth error:', err);
     return c.json({ error: 'Authentication failed' }, 500);
   }
 });
 
-// GET /api/auth/me — Get current user
+// GET /api/auth/me — Get current user from cookie
 app.get('/me', async (c) => {
-  const header = c.req.header('Authorization');
-  const token = header?.startsWith('Bearer ') ? header.slice(7) : null;
+  const { getAuthToken, verifyJWT: v } = await import('../middleware/auth');
+  const token = getAuthToken(c);
+  if (!token) return c.json({ user: null });
 
-  if (!token) {
-    return c.json({ user: null });
-  }
+  const user = await v(token, c.env.JWT_SECRET);
+  return c.json({ user });
+});
 
-  try {
-    const { verifyJWT } = await import('../middleware/auth');
-    const user = await verifyJWT(token, c.env.JWT_SECRET);
-    return c.json({ user });
-  } catch {
-    return c.json({ user: null });
-  }
+// POST /api/auth/logout — Clear auth cookie
+app.post('/logout', (c) => {
+  c.header('Set-Cookie', 'indieboost_token=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0');
+  return c.json({ success: true });
 });
 
 export { app as auth };

@@ -38,14 +38,11 @@ export default function SelectAgentsPage({
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const token = localStorage.getItem("indieboost_token");
-    if (!token) { router.push("/login"); return; }
-
     async function load() {
       try {
         const [campaignRes, executorsRes] = await Promise.all([
-          fetch(`/api/campaigns/${id}`, { headers: { Authorization: `Bearer ${token}` } }),
-          fetch(`/api/executors`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`/api/campaigns/${id}`),
+          fetch(`/api/executors`),
         ]);
         if (!campaignRes.ok) throw new Error("Campaign not found");
         if (!executorsRes.ok) throw new Error("Failed to load agents");
@@ -77,13 +74,11 @@ export default function SelectAgentsPage({
     setLaunching(true);
     setError("");
 
-    const token = localStorage.getItem("indieboost_token");
     try {
       const res = await fetch(`/api/campaigns/${id}/start`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ executor_ids: Array.from(selected) }),
       });

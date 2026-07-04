@@ -1,4 +1,5 @@
 import { createMiddleware } from 'hono/factory';
+import { setCookie, getCookie } from 'hono/cookie';
 import * as jose from 'jose';
 
 type Bindings = {
@@ -16,7 +17,6 @@ type AuthUser = {
   avatar_url: string | null;
 };
 
-// Extend Hono context to include user
 declare module 'hono' {
   interface ContextVariableMap {
     user: AuthUser | null;
@@ -27,7 +27,6 @@ declare module 'hono' {
 export async function createJWT(user: AuthUser, secret: string): Promise<string> {
   const encoder = new TextEncoder();
   const key = encoder.encode(secret);
-
   return new jose.SignJWT({
     sub: String(user.id),
     email: user.email,
@@ -57,35 +56,50 @@ export async function verifyJWT(token: string, secret: string): Promise<AuthUser
   }
 }
 
+// Set JWT as httpOnly cookie
+export function setAuthCookie(c: { cookie: (name: string, value: string, opts?: Record<string, unknown>) => void }, token: string) {
+  setCookie(c, 'indieboost_token', token, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'Lax',
+    path: '/',
+    maxAge: 60 * 60 * 24 * 7, // 7 days
+  });
+}
+
+// Get JWT from cookie or Authorization header (for agent daemon)
+export function getAuthToken(c: { req: { header: (name: string) => string | undefined }; cookie: { [key: string]: string } }) {
+  const cookieToken = getCookie(c, 'indieboost_token');
+  if (cookieToken) return cookieToken;
+
+  const header = c.req.header('Authorization');
+  if (header?.startsWith('Bearer ')) return header.slice(7);
+
+  return null;
+}
+
 // Optional auth middleware — sets user if token is valid, null otherwise
 export const optionalAuth = createMiddleware<{ Bindings: Bindings }>(async (c, next) => {
-  const header = c.req.header('Authorization');
-  const token = header?.startsWith('Bearer ') ? header.slice(7) : null;
-
+  const token = getAuthToken(c);
   if (token) {
     const user = await verifyJWT(token, c.env.JWT_SECRET);
     c.set('user', user);
   } else {
     c.set('user', null);
   }
-
   await next();
 });
 
 // Required auth middleware — returns 401 if no valid token
 export const requireAuth = createMiddleware<{ Bindings: Bindings }>(async (c, next) => {
-  const header = c.req.header('Authorization');
-  const token = header?.startsWith('Bearer ') ? header.slice(7) : null;
-
+  const token = getAuthToken(c);
   if (!token) {
     return c.json({ error: 'Authentication required' }, 401);
   }
-
   const user = await verifyJWT(token, c.env.JWT_SECRET);
   if (!user) {
     return c.json({ error: 'Invalid or expired token' }, 401);
   }
-
   c.set('user', user);
   await next();
 });

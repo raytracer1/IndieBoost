@@ -18,14 +18,14 @@ export default function CampaignForm() {
     setError("");
     setLoading(true);
 
-    const token = localStorage.getItem("indieboost_token");
+    
 
     try {
       const res = await fetch(`/api/campaigns`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          
         },
         body: JSON.stringify({ url, name: name || undefined, goal, budget }),
       });

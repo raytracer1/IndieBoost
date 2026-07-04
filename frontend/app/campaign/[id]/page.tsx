@@ -42,10 +42,10 @@ export default function CampaignDashboard({
   const [error, setError] = useState("");
 
   async function fetchCampaign() {
-    const token = localStorage.getItem("indieboost_token");
+    
     try {
       const res = await fetch(`/api/campaigns/${id}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        
       });
       if (res.status === 401) { router.push("/"); return; }
       if (!res.ok) throw new Error("Campaign not found");
