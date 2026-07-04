@@ -10,37 +10,13 @@ function CallbackHandler() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const code = searchParams.get("code");
-
-    if (!code) {
-      setError("No authorization code received from Google.");
-      return;
+    const token = searchParams.get("token");
+    if (token) {
+      localStorage.setItem("indieboost_token", token);
+      router.push("/create");
+    } else {
+      setError("No token received. Please try again.");
     }
-
-    // Exchange code for JWT via backend
-    fetch("/api/auth/google/callback", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code }),
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error || "Authentication failed");
-        }
-        return res.json();
-      })
-      .then((data) => {
-        if (data.token) {
-          localStorage.setItem("indieboost_token", data.token);
-          router.push("/create");
-        } else {
-          setError("No token received from server.");
-        }
-      })
-      .catch((err) => {
-        setError(err.message || "Authentication failed");
-      });
   }, [searchParams, router]);
 
   if (error) {

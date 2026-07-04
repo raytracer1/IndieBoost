@@ -172,10 +172,10 @@ app.get('/google', (c) => {
   return c.redirect(url);
 });
 
-// POST /api/auth/google/callback — Exchange code for JWT (called by frontend)
-app.post('/google/callback', async (c) => {
+// GET /api/auth/google/callback — Google redirects here (via frontend proxy)
+app.get('/google/callback', async (c) => {
   const db = c.env.DB;
-  const { code } = await c.req.json();
+  const code = c.req.query('code');
 
   if (!code) {
     return c.json({ error: 'Missing authorization code' }, 400);
@@ -268,13 +268,12 @@ app.post('/google/callback', async (c) => {
       }
     }
 
-    // Create JWT and return as JSON
+    // Create JWT and redirect to frontend
     const token = await createJWT(user, c.env.JWT_SECRET);
 
-    return c.json({
-      user: { id: user.id, email: user.email, name: user.name, avatar_url: user.avatar_url },
-      token,
-    });
+    // Build frontend URL from redirect URI (strip /api/auth/google/callback)
+    const frontendBase = c.env.GOOGLE_REDIRECT_URI?.replace('/api/auth/google/callback', '') || 'http://localhost:3000';
+    return c.redirect(`${frontendBase}/auth/callback?token=${token}`);
   } catch (err) {
     console.error('OAuth error:', err);
     return c.json({ error: 'Authentication failed' }, 500);

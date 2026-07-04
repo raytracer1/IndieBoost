@@ -12,7 +12,7 @@
     }
   ],
   "vars": {
-    "GOOGLE_REDIRECT_URI": "https://indie-boost.vercel.app/auth/callback"
+    "GOOGLE_REDIRECT_URI": "https://indie-boost.vercel.app/api/auth/google/callback"
   },
   "observability": {
     "enabled": true
