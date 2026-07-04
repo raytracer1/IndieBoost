@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/api/:path*",
-        destination: "http://localhost:8787/api/:path*",
+        destination: "https://indieboost-backend.zhengbijun123.workers.dev/api/:path*",
       },
     ];
   },

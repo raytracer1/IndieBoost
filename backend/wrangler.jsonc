@@ -9,8 +9,15 @@
 		{
 			"binding": "indieboost_db",
 			"database_name": "indieboost-db",
-			"database_id": "e98e58c4-0b21-4bcf-b913-7b4d749719fe",
-      "migrations_dir": "migrations"
+			"database_id": "bf7dd750-eaaa-422c-959f-82765b318339",
+			"migrations_dir": "migrations",
+			"remote": true
+		},
+		{
+			"binding": "y",
+			"database_name": "indieboost-db",
+			"database_id": "bf7dd750-eaaa-422c-959f-82765b318339",
+			"remote": true
 		}
 	],
 	"vars": {
