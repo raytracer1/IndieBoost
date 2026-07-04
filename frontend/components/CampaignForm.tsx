@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8787";
 
 export default function CampaignForm() {
   const router = useRouter();
@@ -22,7 +21,7 @@ export default function CampaignForm() {
     const token = localStorage.getItem("indieboost_token");
 
     try {
-      const res = await fetch(`${API_BASE}/api/campaigns`, {
+      const res = await fetch(`/api/campaigns`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

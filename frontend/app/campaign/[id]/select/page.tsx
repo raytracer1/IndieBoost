@@ -4,7 +4,6 @@ import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8787";
 
 interface Executor {
   id: number;
@@ -45,8 +44,8 @@ export default function SelectAgentsPage({
     async function load() {
       try {
         const [campaignRes, executorsRes] = await Promise.all([
-          fetch(`${API_BASE}/api/campaigns/${id}`, { headers: { Authorization: `Bearer ${token}` } }),
-          fetch(`${API_BASE}/api/executors`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`/api/campaigns/${id}`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`/api/executors`, { headers: { Authorization: `Bearer ${token}` } }),
         ]);
         if (!campaignRes.ok) throw new Error("Campaign not found");
         if (!executorsRes.ok) throw new Error("Failed to load agents");
@@ -80,7 +79,7 @@ export default function SelectAgentsPage({
 
     const token = localStorage.getItem("indieboost_token");
     try {
-      const res = await fetch(`${API_BASE}/api/campaigns/${id}/start`, {
+      const res = await fetch(`/api/campaigns/${id}/start`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

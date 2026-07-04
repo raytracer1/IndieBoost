@@ -5,7 +5,6 @@ import Link from "next/link";
 import MetricTile from "@/components/MetricTile";
 import ROIBreakdown from "@/components/ROIBreakdown";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8787";
 
 interface ResultsData {
   campaign_id: number;
@@ -55,7 +54,7 @@ export default function ResultsPage({
     async function fetchResults() {
       try {
         const token = localStorage.getItem("indieboost_token");
-        const res = await fetch(`${API_BASE}/api/campaigns/${id}/results`, {
+        const res = await fetch(`/api/campaigns/${id}/results`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
         if (res.status === 401) { setError("Please log in"); setLoading(false); return; }

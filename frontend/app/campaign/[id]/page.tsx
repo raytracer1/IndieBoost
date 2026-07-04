@@ -5,7 +5,6 @@ import Link from "next/link";
 import AgentCard from "@/components/AgentCard";
 import MetricTile from "@/components/MetricTile";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8787";
 
 interface AgentData {
   executor_id: number;
@@ -43,7 +42,7 @@ export default function CampaignDashboard({
   async function fetchCampaign() {
     const token = localStorage.getItem("indieboost_token");
     try {
-      const res = await fetch(`${API_BASE}/api/campaigns/${id}`, {
+      const res = await fetch(`/api/campaigns/${id}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (res.status === 401) { router.push("/"); return; }

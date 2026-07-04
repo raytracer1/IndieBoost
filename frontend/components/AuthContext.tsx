@@ -2,8 +2,6 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8787";
-
 interface User {
   id: number;
   email: string;
@@ -63,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     localStorage.setItem("indieboost_token", token);
 
-    fetch(`${API_BASE}/api/auth/me`, {
+    fetch(`/api/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
@@ -82,12 +80,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [token]);
 
   const loginWithGoogle = useCallback(() => {
-    window.location.href = `${API_BASE}/api/auth/google`;
+    window.location.href = `/api/auth/google`;
   }, []);
 
   const loginWithEmail = useCallback(async (email: string, password: string): Promise<string | null> => {
     try {
-      const res = await fetch(`${API_BASE}/api/auth/login`, {
+      const res = await fetch(`/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
@@ -105,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const registerWithEmail = useCallback(async (email: string, password: string, name?: string): Promise<RegisterResult> => {
     try {
-      const res = await fetch(`${API_BASE}/api/auth/register`, {
+      const res = await fetch(`/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, name }),
@@ -131,7 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const verifyEmail = useCallback(async (email: string, otp: string): Promise<string | null> => {
     try {
-      const res = await fetch(`${API_BASE}/api/auth/verify-email`, {
+      const res = await fetch(`/api/auth/verify-email`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, otp }),
