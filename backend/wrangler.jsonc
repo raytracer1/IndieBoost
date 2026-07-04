@@ -1,20 +1,22 @@
 {
-  "name": "indieboost-backend",
-  "main": "src/index.ts",
-  "compatibility_date": "2025-01-01",
-  "compatibility_flags": ["nodejs_compat"],
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "indieboost-db",
-      "database_id": "indieboost-db-id",
+	"name": "indieboost-backend",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-01-01",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"d1_databases": [
+		{
+			"binding": "indieboost_db",
+			"database_name": "indieboost-db",
+			"database_id": "e98e58c4-0b21-4bcf-b913-7b4d749719fe",
       "migrations_dir": "migrations"
-    }
-  ],
-  "vars": {
-    "GOOGLE_REDIRECT_URI": "https://indie-boost.vercel.app/api/auth/google/callback"
-  },
-  "observability": {
-    "enabled": true
-  }
+		}
+	],
+	"vars": {
+		"GOOGLE_REDIRECT_URI": "https://indie-boost.vercel.app/api/auth/google/callback"
+	},
+	"observability": {
+		"enabled": true
+	}
 }
