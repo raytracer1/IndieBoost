@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
 import { AuthProvider } from "@/components/AuthContext";
 import Navbar from "@/components/Navbar";
@@ -26,6 +27,7 @@ export default function RootLayout({
             IndieBoost — AI-Powered Growth for Indie Hackers
           </footer>
         </AuthProvider>
+        <Analytics />
       </body>
     </html>
   );
