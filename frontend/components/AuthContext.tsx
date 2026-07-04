@@ -32,10 +32,8 @@ const AuthContext = createContext<AuthState>({
   loading: true,
   loginWithGoogle: () => {},
   loginWithEmail: async () => null,
-  registerWithEmail: async () => ({}),
+  registerWithEmail: async () => ({}) as RegisterResult,
   verifyEmail: async () => null,
-  loginWithEmail: async () => null,
-  registerWithEmail: async () => null,
   logout: () => {},
 });
 
